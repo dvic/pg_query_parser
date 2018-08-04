@@ -4,3 +4,12 @@ rust:
   - stable
   - beta
   - nightly
+
+cache:
+  directories:
+    - $HOME/.cargo
+
+script:
+  - cargo build -vv --all
+  - cargo test -vv --all
+  - cargo bench -vv --all

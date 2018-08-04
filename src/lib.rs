@@ -1,35 +1,10 @@
 extern crate libc;
 
-mod ffi {
+use libc::c_char;
+use std::ffi::{CStr, CString};
+use std::str;
 
-    use libc::{c_char, c_int};
-
-    #[derive(Debug)]
-    #[repr(C)]
-    pub struct PgQueryError {
-        pub message: *const c_char,  // exception message
-        pub funcname: *const c_char, // source function of exception (e.g. SearchSysCache)
-        pub filename: *const c_char, // source of exception (e.g. parse.l)
-        pub lineno: c_int,           // source of exception (e.g. 104)
-        pub cursorpos: c_int,        // char in query at which exception occurred
-        pub context: *const c_char,  // additional context (optional, can be NULL)
-    }
-
-    #[derive(Debug)]
-    #[repr(C)]
-    pub struct PgQueryParseResult {
-        pub parse_tree: *const c_char,
-        pub stderr_buffer: *const c_char,
-        pub error: *mut PgQueryError,
-    }
-
-    #[link(name = "pg_query")]
-    extern "C" {
-        pub fn pg_query_parse(input: *const c_char) -> PgQueryParseResult;
-
-        pub fn pg_query_free_parse_result(result: PgQueryParseResult);
-    }
-}
+mod ffi;
 
 #[derive(Debug)]
 pub struct PgQueryError {
@@ -42,101 +17,176 @@ pub struct PgQueryError {
 }
 
 #[derive(Debug)]
-pub struct PgQueryParseResult {
-    pub parse_tree: String,
+pub struct ParseErrors {
+    pub query_error: Option<PgQueryError>,
     pub stderr_buffer: Option<String>,
-    pub error: Option<PgQueryError>,
 }
 
-pub fn pg_query_parse(input: &str) -> PgQueryParseResult {
-    use std::ffi::{CStr, CString};
-    use std::str;
+type PgQueryParseResult = Result<String, ParseErrors>;
 
+pub fn pg_query_parse(input: &str) -> PgQueryParseResult {
     let c_input = CString::new(input).unwrap();
 
     unsafe {
-        let result = ffi::pg_query_parse(c_input.as_ptr());
+        let parse_result = ffi::pg_query_parse(c_input.as_ptr());
 
-        let query_error = if !result.error.is_null() {
-            let ref error = *(result.error);
+        let parse_tree = non_zero_string(parse_result.parse_tree);
+        let query_error = convert_query_error(parse_result.error);
+        let stderr_buffer = non_zero_string(parse_result.stderr_buffer);
 
-            let message = {
-                let bytes = CStr::from_ptr(error.message).to_bytes();
-                str::from_utf8(bytes).unwrap().to_string()
-            };
+        ffi::pg_query_free_parse_result(parse_result);
 
-            let funcname = {
-                let bytes = CStr::from_ptr(error.funcname).to_bytes();
-                str::from_utf8(bytes).unwrap().to_string()
-            };
-
-            let filename = {
-                let bytes = CStr::from_ptr(error.filename).to_bytes();
-                str::from_utf8(bytes).unwrap().to_string()
-            };
-
-            let context = if !error.context.is_null() {
-                let bytes = CStr::from_ptr(error.context).to_bytes();
-                Some(str::from_utf8(bytes).unwrap().to_string())
-            } else {
-                None
-            };
-
-            let query_error = PgQueryError {
-                message: message,
-                funcname: funcname,
-                filename: filename,
-                lineno: error.lineno,
-                cursorpos: error.cursorpos,
-                context: context,
-            };
-
-            Some(query_error)
+        if query_error.is_some() || stderr_buffer.is_some() {
+            Err(ParseErrors {
+                query_error,
+                stderr_buffer,
+            })
         } else {
-            None
-        };
-
-        let parse_tree = {
-            let parse_tree_bytes = CStr::from_ptr(result.parse_tree).to_bytes();
-            str::from_utf8(parse_tree_bytes).unwrap().to_string()
-        };
-
-        let stderr_buffer = if !result.stderr_buffer.is_null() {
-            let stderr_buffer_bytes = CStr::from_ptr(result.stderr_buffer).to_bytes();
-            Some(str::from_utf8(stderr_buffer_bytes).unwrap().to_string())
-        } else {
-            None
-        };
-
-        ffi::pg_query_free_parse_result(result);
-
-        PgQueryParseResult {
-            parse_tree: parse_tree,
-            stderr_buffer: stderr_buffer,
-            error: query_error,
+            Ok(parse_tree.unwrap_or("".to_string()))
         }
+    }
+}
+
+type PgQueryFingerprintResult = Result<String, ParseErrors>;
+
+pub fn pg_fingerprint(input: &str) -> PgQueryFingerprintResult {
+    let c_input = CString::new(input).unwrap();
+    unsafe {
+        let fingerprint_result = ffi::pg_query_fingerprint_with_opts(c_input.as_ptr(), false);
+
+        let fingerprint = non_zero_string(fingerprint_result.hexdigest);
+        let query_error = convert_query_error(fingerprint_result.error);
+        let stderr_buffer = non_zero_string(fingerprint_result.stderr_buffer);
+
+        ffi::pg_query_free_fingerprint_result(fingerprint_result);
+
+        if query_error.is_some() || stderr_buffer.is_some() {
+            Err(ParseErrors {
+                query_error,
+                stderr_buffer,
+            })
+        } else {
+            Ok(fingerprint.unwrap_or("".to_string()))
+        }
+    }
+}
+
+unsafe fn non_zero_string(buf: *const c_char) -> Option<String> {
+    if !buf.is_null() {
+        let ret_bytes = CStr::from_ptr(buf).to_bytes();
+        Some(str::from_utf8(ret_bytes).unwrap().to_string()).filter(|v| v != "")
+    } else {
+        None
+    }
+}
+
+unsafe fn convert_query_error(error: *mut ffi::PgQueryError) -> Option<PgQueryError> {
+    if !error.is_null() {
+        let error = &*(error);
+        let message = {
+            let bytes = CStr::from_ptr(error.message).to_bytes();
+            str::from_utf8(bytes).unwrap().to_string()
+        };
+
+        let funcname = {
+            let bytes = CStr::from_ptr(error.funcname).to_bytes();
+            str::from_utf8(bytes).unwrap().to_string()
+        };
+
+        let filename = {
+            let bytes = CStr::from_ptr(error.filename).to_bytes();
+            str::from_utf8(bytes).unwrap().to_string()
+        };
+
+        let context = if !error.context.is_null() {
+            let bytes = CStr::from_ptr(error.context).to_bytes();
+            Some(str::from_utf8(bytes).unwrap().to_string())
+        } else {
+            None
+        };
+
+        Some(PgQueryError {
+            message: message,
+            funcname: funcname,
+            filename: filename,
+            lineno: error.lineno,
+            cursorpos: error.cursorpos,
+            context: context,
+        })
+    } else {
+        None
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use super::pg_query_parse;
+    use super::*;
 
     #[test]
-    fn it_works() {
+    fn parse_query_valid() {
         let result = pg_query_parse("SELECT 1");
 
-        println!("{:?}", result);
-        assert!(result.error.is_none());
+        match result {
+            Ok(parsed) => println!("{:?}", parsed),
+            Err(ParseErrors {
+                query_error,
+                stderr_buffer,
+            }) => panic!(
+                "query_error: {:?}, stderr_buffer: {:?}",
+                query_error, stderr_buffer
+            ),
+        }
     }
 
     #[test]
-    fn it_does_not_work() {
+    fn parse_query_invalid() {
         let result = pg_query_parse("INSERT FROM DOES NOT WORK");
 
-        println!("{:?}", result);
-        assert!(result.error.is_some());
+        match result {
+            Ok(parsed) => panic!("got unexpected result {:?}", parsed),
+            Err(ParseErrors {
+                query_error,
+                stderr_buffer,
+            }) => println!(
+                "query_error: {:?}, stderr_buffer: {:?}",
+                query_error, stderr_buffer
+            ),
+        }
+    }
+
+    #[test]
+    fn fingerprint_query_valid() {
+        let result = pg_fingerprint("SELECT 1");
+
+        match result {
+            Ok(fingerprint) => {
+                assert_eq!("02a281c251c3a43d2fe7457dff01f76c5cc523f8c8", fingerprint)
+            }
+            Err(ParseErrors {
+                query_error,
+                stderr_buffer,
+            }) => panic!(
+                "query_error: {:?}, stderr_buffer: {:?}",
+                query_error, stderr_buffer
+            ),
+        }
+    }
+
+    #[test]
+    fn fingerprint_query_invalid() {
+        let result = pg_fingerprint("INSERT FROM DOES NOT WORK");
+
+        match result {
+            Ok(parsed) => panic!("got unexpected result {:?}", parsed),
+            Err(ParseErrors {
+                query_error,
+                stderr_buffer,
+            }) => println!(
+                "query_error: {:?}, stderr_buffer: {:?}",
+                query_error, stderr_buffer
+            ),
+        }
     }
 
     // TODO: more tests

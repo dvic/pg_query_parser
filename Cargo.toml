@@ -2,8 +2,14 @@
 name = "pg_query_parser"
 version = "0.1.0"
 authors = ["Alberto Leal <mailforalberto@gmail.com>"]
-
 build = "build.rs"
+
+[[bench]]
+name = "benchmark"
+harness = false
+
+[dev-dependencies]
+criterion = "0.2"
 
 [dependencies]
 libc = "0.2"
