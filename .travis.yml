@@ -10,6 +10,6 @@ cache:
     - $HOME/.cargo
 
 script:
-  - cargo build -vv --all
+  - cargo build --all
   - cargo test -vv --all
   - cargo bench -vv --all
