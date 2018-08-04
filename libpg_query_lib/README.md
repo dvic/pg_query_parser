@@ -4,7 +4,7 @@ C library for accessing the PostgreSQL parser outside of the server.
 
 This library uses the actual PostgreSQL server source to parse SQL queries and return the internal PostgreSQL parse tree.
 
-Note that this is mostly intended as a base library for https://github.com/lfittl/pg_query (Ruby), https://github.com/lfittl/pg_query.go (Go), https://github.com/zhm/pg-query-parser (Node) and https://github.com/alculquicondor/psqlparse (Python).
+Note that this is mostly intended as a base library for https://github.com/lfittl/pg_query (Ruby), https://github.com/lfittl/pg_query.go (Go), https://github.com/zhm/pg-query-parser (Node), https://github.com/alculquicondor/psqlparse (Python) and https://pypi.org/project/pg_query/ (Python 3.6).
 
 You can find further background to why a query's parse tree is useful here: https://pganalyze.com/blog/parse-postgresql-queries-in-ruby.html
 
@@ -12,7 +12,7 @@ You can find further background to why a query's parse tree is useful here: http
 ## Installation
 
 ```sh
-git clone -b 9.5-latest git://github.com/lfittl/libpg_query
+git clone -b 10-latest git://github.com/lfittl/libpg_query
 cd libpg_query
 make
 ```
@@ -44,13 +44,13 @@ int main() {
 Compile it like this:
 
 ```
-cc -Ilibpg_query -Llibpg_query -lpg_query example.c
+cc -Ilibpg_query -Llibpg_query example.c -lpg_query
 ```
 
 This will output:
 
 ```json
-[{"SELECT": {"distinctClause": null, "intoClause": null, "targetList": [{"RESTARGET": {"name": null, "indirection": null, "val": {"A_CONST": {"val": 1, "location": 7}}, "location": 7}}], "fromClause": null, "whereClause": null, "groupClause": null, "havingClause": null, "windowClause": null, "valuesLists": null, "sortClause": null, "limitOffset": null, "limitCount": null, "lockingClause": null, "withClause": null, "op": 0, "all": false, "larg": null, "rarg": null}}]
+[{"SelectStmt": {"targetList": [{"ResTarget": {"val": {"A_Const": {"val": {"Integer": {"ival": 1}}, "location": 7}}, "location": 7}}], "op": 0}}]
 ```
 
 
@@ -133,9 +133,32 @@ This will output:
 
 For stability, it is recommended you use individual tagged git versions, see CHANGELOG.
 
-Current `master` reflects a PostgreSQL base version of 9.4, with a legacy output format.
+`master` reflects a PostgreSQL base version of 9.4, with a legacy output format.
 
-New development is happening on `9.5-latest`, which will become `master` in the future.
+New development is happening on `10-latest`, which reflects a base version of Postgres 10.
+
+
+## Resources
+
+pg_query wrappers in other languages:
+
+* Ruby: [pg_query](https://github.com/lfittl/pg_query)
+* Go: [pg_query_go](https://github.com/lfittl/pg_query_go)
+* Javascript (Node): [pg-query-parser](https://github.com/zhm/pg-query-parser)
+* Javascript (Browser): [pg-query-emscripten](https://github.com/lfittl/pg-query-emscripten)
+* Python: [psqlparse](https://github.com/alculquicondor/psqlparse)
+
+Products, tools and libraries built on pg_query:
+
+* [pganalyze](https://pganalyze.com/)
+* [hsql](https://github.com/JackDanger/hsql)
+* [sqlint](https://github.com/purcell/sqlint)
+* [pghero](https://github.com/ankane/pghero)
+* [dexter](https://github.com/ankane/dexter)
+* [pgscope](https://github.com/gjalves/pgscope)
+* [pg_materialize](https://github.com/aanari/pg-materialize)
+
+Please feel free to [open a PR](https://github.com/lfittl/libpg_query/pull/new/master) to add yours! :)
 
 
 ## Authors
@@ -146,8 +169,8 @@ New development is happening on `9.5-latest`, which will become `master` in the 
 ## License
 
 PostgreSQL server source code, used under the [PostgreSQL license](https://www.postgresql.org/about/licence/).<br>
-Portions Copyright (c) 1996-2016, The PostgreSQL Global Development Group<br>
+Portions Copyright (c) 1996-2017, The PostgreSQL Global Development Group<br>
 Portions Copyright (c) 1994, The Regents of the University of California
 
 All other parts are licensed under the 3-clause BSD license, see LICENSE file for details.<br>
-Copyright (c) 2016, Lukas Fittl <lukas@fittl.com>
+Copyright (c) 2017, Lukas Fittl <lukas@fittl.com>

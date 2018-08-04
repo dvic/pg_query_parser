@@ -2,6 +2,71 @@
 
 All versions are tagged by the major Postgres version, plus an individual semver for this library itself.
 
+## 10-1.0.2
+
+* Avoid compiler warning due to unused result in pg_query_parse_plpgsql
+
+
+## 10-1.0.1   2017-10-31
+
+* Fix fingerprint tests
+
+
+## 10-1.0.0   2017-10-30
+
+* First release based on PostgreSQL 10.0
+  - Parse tree output may have changed in backwards-incompatible ways!
+  - Fingerprint base version bumped to "02" to reflect the change in parse trees
+
+
+## 9.5-1.7.1    2017-10-26
+
+* Allow "$1 FROM $2" to be parsed
+  - This is new with Postgres 10 output of pg_stat_statements, so we should
+    treat this the same as "? FROM ?" in earlier versions.
+
+
+## 9.5-1.7.0    2017-10-20
+
+* Update to Postgres 9.5.9
+* Support gcc versions earlier than 4.6.0
+* Export version information in pg_query.h directly
+
+
+## 9.5-1.6.2    2017-07-30
+
+* Fingerprinting Version 1.3
+  * Attributes to be ignored:
+    * RangeVar.relname (if node also has RangeVar.relpersistence = "t")
+  * Special cases: List nodes where parent field name is valuesLists
+    * Follow same logic described for fromClause/targetList/cols/rexpr
+
+
+## 9.5-1.6.1    2017-07-29
+
+* Fingerprinting Version 1.2
+  * Ignore portal_name in DeclareCursorStmt, FetchStmt and ClosePortalStmt
+
+
+## 9.5-1.6.0    2017-07-29
+
+* Change normalization methods to output $1/$2 .. $N instead of ? characters
+  * BREAKING CHANGE in pg_query_normalize(..) output
+  * This matches the change in the upcoming Postgres 10, and makes it easier
+    to migrate applications to the new normalization format
+
+
+## 9.5-1.5.0    2017-05-26
+
+* Update to Postgres 9.5.7
+* Disable 128-bit integer support (they are not used), to support 32-bit archs [@herwinw](https://github.com/herwinw)
+* Cleanup efforts [@herwinw](https://github.com/herwinw)
+  * Improve concurrency tests
+  * Make sure we have a valid proc_source
+  * Normalized whitespace in pg_query_parse_plpgsql
+  * Move inclusion of stdio.h in plpgsql parser
+
+
 ## 9.5-1.4.2    2016-12-06
 
 * Cut off fingerprints at 100 nodes deep to avoid excessive runtimes/memory

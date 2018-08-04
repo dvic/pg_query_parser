@@ -1,7 +1,6 @@
 use std::process::{Command, Stdio};
 
 fn main() {
-
     let ret = Command::new("make")
         .arg("-C")
         .arg("libpg_query_lib")

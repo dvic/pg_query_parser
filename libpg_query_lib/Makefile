@@ -5,7 +5,7 @@ ARLIB = lib$(TARGET).a
 PGDIR = $(root_dir)/tmp/postgres
 PGDIRBZ2 = $(root_dir)/tmp/postgres.tar.bz2
 
-PG_VERSION = 9.5.3
+PG_VERSION = 10.0
 
 SRC_FILES := $(wildcard src/*.c src/postgres/*.c)
 OBJ_FILES := $(SRC_FILES:.c=.o)
@@ -52,7 +52,6 @@ $(PGDIR):
 	tar -xjf $(PGDIRBZ2)
 	mv $(root_dir)/postgresql-$(PG_VERSION) $(PGDIR)
 	cd $(PGDIR); patch -p1 < $(root_dir)/patches/01_parse_replacement_char.patch
-	cd $(PGDIR); patch -p1 < $(root_dir)/patches/02_normalize_alter_role_password.patch
 	cd $(PGDIR); CFLAGS="$(PG_CFLAGS)" ./configure $(PG_CONFIGURE_FLAGS)
 	cd $(PGDIR); make -C src/port pg_config_paths.h
 	cd $(PGDIR); make -C src/backend parser-recursive # Triggers copying of includes to where they belong, as well as generating gram.c/scan.c
@@ -68,6 +67,14 @@ extract_source: $(PGDIR)
 	echo "#undef HAVE_LOCALE_T" >> ./src/postgres/include/pg_config.h
 	echo "#undef LOCALE_T_IN_XLOCALE" >> ./src/postgres/include/pg_config.h
 	echo "#undef WCSTOMBS_L_IN_XLOCALE" >> ./src/postgres/include/pg_config.h
+	# Support 32-bit systems without reconfiguring
+	echo "#undef PG_INT128_TYPE" >> ./src/postgres/include/pg_config.h
+	# Support gcc earlier than 4.6.0 without reconfiguring
+	echo "#undef HAVE__STATIC_ASSERT" >> ./src/postgres/include/pg_config.h
+	# Copy version information so its easily accessible
+	sed -i "" '$(shell echo 's/\#define PG_MAJORVERSION .*/'`grep "\#define PG_MAJORVERSION " ./src/postgres/include/pg_config.h`'/')' pg_query.h
+	sed -i "" '$(shell echo 's/\#define PG_VERSION .*/'`grep "\#define PG_VERSION " ./src/postgres/include/pg_config.h`'/')' pg_query.h
+	sed -i "" '$(shell echo 's/\#define PG_VERSION_NUM .*/'`grep "\#define PG_VERSION_NUM " ./src/postgres/include/pg_config.h`'/')' pg_query.h
 
 .c.o:
 	@$(ECHO) compiling $(<)

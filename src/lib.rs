@@ -1,4 +1,3 @@
-#![feature(libc)]
 extern crate libc;
 
 mod ffi {
@@ -8,25 +7,24 @@ mod ffi {
     #[derive(Debug)]
     #[repr(C)]
     pub struct PgQueryError {
-        pub message: *const c_char, // exception message
+        pub message: *const c_char,  // exception message
         pub funcname: *const c_char, // source function of exception (e.g. SearchSysCache)
         pub filename: *const c_char, // source of exception (e.g. parse.l)
-        pub lineno: c_int, // source of exception (e.g. 104)
-        pub cursorpos: c_int, // char in query at which exception occurred
-        pub context: *const c_char, // additional context (optional, can be NULL)
+        pub lineno: c_int,           // source of exception (e.g. 104)
+        pub cursorpos: c_int,        // char in query at which exception occurred
+        pub context: *const c_char,  // additional context (optional, can be NULL)
     }
 
     #[derive(Debug)]
     #[repr(C)]
     pub struct PgQueryParseResult {
-      pub parse_tree: *const c_char,
-      pub stderr_buffer: *const c_char,
-      pub error: *mut PgQueryError
+        pub parse_tree: *const c_char,
+        pub stderr_buffer: *const c_char,
+        pub error: *mut PgQueryError,
     }
 
     #[link(name = "pg_query")]
     extern "C" {
-
         pub fn pg_query_parse(input: *const c_char) -> PgQueryParseResult;
 
         pub fn pg_query_free_parse_result(result: PgQueryParseResult);
@@ -45,14 +43,13 @@ pub struct PgQueryError {
 
 #[derive(Debug)]
 pub struct PgQueryParseResult {
-      pub parse_tree: String,
-      pub stderr_buffer: Option<String>,
-      pub error: Option<PgQueryError>
+    pub parse_tree: String,
+    pub stderr_buffer: Option<String>,
+    pub error: Option<PgQueryError>,
 }
 
 pub fn pg_query_parse(input: &str) -> PgQueryParseResult {
-
-    use std::ffi::{CString, CStr};
+    use std::ffi::{CStr, CString};
     use std::str;
 
     let c_input = CString::new(input).unwrap();
@@ -61,7 +58,6 @@ pub fn pg_query_parse(input: &str) -> PgQueryParseResult {
         let result = ffi::pg_query_parse(c_input.as_ptr());
 
         let query_error = if !result.error.is_null() {
-
             let ref error = *(result.error);
 
             let message = {
@@ -92,11 +88,10 @@ pub fn pg_query_parse(input: &str) -> PgQueryParseResult {
                 filename: filename,
                 lineno: error.lineno,
                 cursorpos: error.cursorpos,
-                context: context
+                context: context,
             };
 
             Some(query_error)
-
         } else {
             None
         };
@@ -118,7 +113,7 @@ pub fn pg_query_parse(input: &str) -> PgQueryParseResult {
         PgQueryParseResult {
             parse_tree: parse_tree,
             stderr_buffer: stderr_buffer,
-            error: query_error
+            error: query_error,
         }
     }
 }
@@ -126,26 +121,22 @@ pub fn pg_query_parse(input: &str) -> PgQueryParseResult {
 #[cfg(test)]
 mod tests {
 
-    use super::{pg_query_parse};
+    use super::pg_query_parse;
 
     #[test]
     fn it_works() {
-
         let result = pg_query_parse("SELECT 1");
 
         println!("{:?}", result);
         assert!(result.error.is_none());
-
     }
 
     #[test]
     fn it_does_not_work() {
-
         let result = pg_query_parse("INSERT FROM DOES NOT WORK");
 
         println!("{:?}", result);
         assert!(result.error.is_some());
-
     }
 
     // TODO: more tests

@@ -8,7 +8,7 @@
 
 #include "parse_tests.c"
 
-#define THREAD_COUNT 1000
+#define THREAD_COUNT 500
 
 void* test_runner(void*);
 
@@ -20,7 +20,7 @@ int main() {
   for (i = 0; i < THREAD_COUNT; i += 1) {
     ret = pthread_create(&threads[i], NULL, test_runner, NULL);
     if (ret) {
-      printf("ERROR creating pthread - pthread_create return code %d\n", ret);
+      perror("ERROR creating pthread");
       return 1;
     }
   }
@@ -40,7 +40,9 @@ void* test_runner(void* ptr) {
   for (i = 0; i < testsLength; i += 2) {
     PgQueryParseResult result = pg_query_parse(tests[i]);
 
-    if (strcmp(result.parse_tree, tests[i + 1]) == 0) {
+		if (result.error) {
+			printf("%s\n", result.error->message);
+		} else if (strcmp(result.parse_tree, tests[i + 1]) == 0) {
       printf(".");
     } else {
       printf("INVALID result for \"%s\"\nexpected: %s\nactual: %s\n", tests[i], tests[i + 1], result.parse_tree);

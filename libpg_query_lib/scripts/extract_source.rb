@@ -79,7 +79,6 @@ class Runner
       @basepath + 'src/backend/utils/adt/like_match.c', # Built through like.c
       @basepath + 'src/backend/utils/misc/guc-file.c', # Built through guc.c
       @basepath + 'src/backend/utils/sort/qsort_tuple.c', # Built through tuplesort.c
-      @basepath + 'src/backend/parser/scan.c', # Built through gram.c
       @basepath + 'src/backend/bootstrap/bootscanner.c', # Built through bootparse.c
       @basepath + 'src/backend/regex/regc_color.c', # Built through regcomp.c
       @basepath + 'src/backend/regex/regc_cvec.c', # Built through regcomp.c
@@ -89,9 +88,12 @@ class Runner
       @basepath + 'src/backend/regex/regc_nfa.c', # Built through regcomp.c
       @basepath + 'src/backend/regex/rege_dfa.c', # Built through regexec.c
       @basepath + 'src/backend/replication/repl_scanner.c', # Built through repl_gram.c
+      @basepath + 'src/backend/replication/libpqwalreceiver/libpqwalreceiver.c',
+      @basepath + 'src/backend/replication/syncrep_scanner.c',
       @basepath + 'src/backend/port/posix_sema.c', # Linux only
       @basepath + 'src/common/fe_memutils.c', # This file is not expected to be compiled for backend code
       @basepath + 'src/common/restricted_token.c', # This file is not expected to be compiled for backend code
+      @basepath + 'src/common/unicode/norm_test.c', # This file is not expected to be compiled for backend code
       @basepath + 'src/port/dirent.c', # Win32 only
       @basepath + 'src/port/getaddrinfo.c', # Win32 only
       @basepath + 'src/port/getrusage.c', # Win32 only
@@ -102,6 +104,8 @@ class Runner
       @basepath + 'src/port/strlcpy.c', # Win32 only
       @basepath + 'src/port/unsetenv.c', # Win32 only
       @basepath + 'src/port/win32error.c', # Win32 only
+      @basepath + 'src/port/win32env.c', # Win32 only
+      @basepath + 'src/port/win32security.c' # Win32 only
     ] -
     Dir.glob(@basepath + 'src/backend/port/dynloader/*.c') -
     Dir.glob(@basepath + 'src/backend/port/win32/*.c') -
@@ -198,7 +202,7 @@ class Runner
 
   def analyze_file(file)
     index = FFI::Clang::Index.new(true, true)
-    translation_unit = index.parse_translation_unit(file, ['-I', @basepath + 'src/include', '-DDLSUFFIX=".bundle"', '-msse4.2', '-g'])
+    translation_unit = index.parse_translation_unit(file, ['-I', @basepath + 'src/include', '-I', '/usr/local/opt/openssl/include', '-DDLSUFFIX=".bundle"', '-msse4.2', '-g'])
     cursor = translation_unit.cursor
 
     func_cursor = nil
@@ -230,7 +234,8 @@ class Runner
             end_offset = cursor.extent.end.offset
             end_offset += 1 if cursor.kind == :cursor_variable # The ";" isn't counted correctly by clang
 
-            if cursor.kind == :cursor_variable && cursor.linkage == :external && !cursor.type.const_qualified? && !cursor.type.array_element_type.const_qualified?
+            if cursor.kind == :cursor_variable && (cursor.linkage == :external || cursor.linkage == :internal) &&
+              !cursor.type.const_qualified? && !cursor.type.array_element_type.const_qualified?
               analysis.external_variables << cursor.spelling
             end
 
@@ -333,7 +338,7 @@ class Runner
   end
 
   def special_include_file?(filename)
-    filename[/\/(reg(c|e)_[\w_]+|scan|guc-file|qsort_tuple|repl_scanner|levenshtein|bootscanner|like_match)\.c$/] || filename[/\/[\w_]+_impl.h$/]
+    filename[/\/(reg(c|e)_[\w_]+|guc-file|qsort_tuple|repl_scanner|levenshtein|bootscanner|like_match)\.c$/] || filename[/\/[\w_]+_impl.h$/]
   end
 
   def write_out
@@ -376,7 +381,11 @@ class Runner
           str += "\n" + @mock[symbol] + "\n"
         elsif @external_variables.include?(symbol) && symbols.include?(symbol)
           file_thread_local_variables << symbol
-          str += "\n__thread " + skipped_code.strip + "\n"
+          if skipped_code.include?('static')
+            str += "\n" + skipped_code.strip.gsub('static', 'static __thread') + "\n"
+          else
+            str += "\n__thread " + skipped_code.strip + "\n"
+          end
         else
           # In the off chance that part of a macro is before a symbol (e.g. ifdef),
           # but the closing part is inside (e.g. endif) we need to output all macros inside skipped parts
